@@ -1,0 +1,18 @@
+{
+  "name": "psd-hub-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PSD 展示台的本地工具集（示例素材生成 + 交叉校验 + 端到端冒烟）",
+  "scripts": {
+    "fixture": "node make-sample-psd.mjs",
+    "verify": "node verify-fixtures.mjs",
+    "verify:structure": "node verify-psd.mjs",
+    "crosscheck": "python pillow-crosscheck.py",
+    "smoke": "node smoke-e2e.mjs",
+    "seed": "node seed-demo.mjs"
+  },
+  "devDependencies": {
+    "ag-psd": "^31.0.2"
+  }
+}

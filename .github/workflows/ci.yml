@@ -1,0 +1,179 @@
+# =============================================================================
+# CI · 每次推送 / PR 都跑：前后端类型检查、单元测试、生产构建、镜像构建
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags-ignore: ['v*'] # 打标签的发版流程交给 deploy.yml
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支上只保留最新一次运行
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 后端：类型检查 → 测试 → 构建 → 冒烟（真实 HTTP）
+  # ---------------------------------------------------------------------------
+  backend:
+    name: 后端（typecheck / test / build）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci --no-audit --no-fund
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 单元与接口测试
+        run: npm test
+
+      - name: 生产构建
+        run: npm run build
+
+      - name: 校验产物存在
+        run: test -f dist/index.js
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist
+          path: backend/dist
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 前端：类型检查 → 测试 → 构建
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: 前端（typecheck / test / build）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci --no-audit --no-fund
+
+      - name: 生成 PSD 测试素材
+        working-directory: .
+        run: |
+          npm --prefix tools install --no-audit --no-fund
+          node tools/make-sample-psd.mjs
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 单元测试（含 ag-psd 真实素材回归）
+        run: npm test
+
+      - name: 生产构建
+        run: npm run build
+
+      - name: 校验产物存在
+        run: test -f dist/index.html
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # 端到端：用真实构建产物起服务，跑完整上传/下载/预览冒烟
+  # ---------------------------------------------------------------------------
+  e2e:
+    name: 端到端冒烟
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-dist
+          path: backend/dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: 生成 PSD 测试素材
+        run: node tools/make-sample-psd.mjs
+
+      - name: 安装后端生产依赖
+        run: npm --prefix backend install --omit=dev --no-audit --no-fund
+
+      - name: 运行端到端冒烟（66 项断言）
+        run: node tools/smoke-e2e.mjs
+
+  # ---------------------------------------------------------------------------
+  # 镜像：验证 Dockerfile 能构建出可用镜像（不推送）
+  # ---------------------------------------------------------------------------
+  docker:
+    name: 镜像构建校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 构建镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          push: false
+          load: true
+          tags: psd-hub:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 起容器并验证健康检查
+        run: |
+          docker run -d --name psd-hub-ci -p 4000:4000 \
+            -e UPLOAD_TOKEN= -e ADMIN_TOKEN= psd-hub:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4000/api/health; then echo; exit 0; fi
+            sleep 2
+          done
+          echo "容器健康检查失败，输出日志："
+          docker logs psd-hub-ci
+          exit 1
+
+      - name: 清理
+        if: always()
+        run: docker rm -f psd-hub-ci || true

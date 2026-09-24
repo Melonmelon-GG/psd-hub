@@ -1,0 +1,227 @@
+# =============================================================================
+# CD · 打 tag（v1.2.3）时自动发版
+#
+#   1. 构建多架构镜像并推到 GitHub Container Registry
+#   2. SSH 到服务器，拉取新镜像并滚动重启（docker compose）
+#   3. 健康检查失败则自动回滚到上一版镜像
+#
+# 需要的仓库 Secrets：
+#   DEPLOY_HOST        服务器地址
+#   DEPLOY_USER        SSH 用户
+#   DEPLOY_SSH_KEY     SSH 私钥（ed25519，无口令）
+#   DEPLOY_PORT        SSH 端口（可选，默认 22）
+#   DEPLOY_PATH        部署目录（可选，默认 /opt/psd-hub）
+#   GHCR_TOKEN         仅当 GHCR 包为私有、服务器需要登录时使用
+#
+# 若你不用镜像仓库、想用「本地构建 + rsync 推送」，改用 deploy.yml 里的
+# rsync 方案或直接跑 deploy/scripts/deploy.sh（见 docs/DEPLOY.md）。
+# =============================================================================
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要部署的镜像标签（默认取当前 ref 名）'
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '24'
+  REGISTRY: ghcr.io
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 发版前完整校验：任何一步失败都不允许发布
+  # ---------------------------------------------------------------------------
+  verify:
+    name: 发布前校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: 安装依赖
+        run: |
+          npm --prefix backend ci --no-audit --no-fund
+          npm --prefix frontend ci --no-audit --no-fund
+
+      - name: 生成 PSD 测试素材
+        run: node tools/make-sample-psd.mjs
+
+      - name: 后端 typecheck / test / build
+        run: |
+          npm --prefix backend run typecheck
+          npm --prefix backend test
+          npm --prefix backend run build
+
+      - name: 前端 typecheck / test / build
+        run: |
+          npm --prefix frontend run typecheck
+          npm --prefix frontend test
+          npm --prefix frontend run build
+
+      - name: 端到端冒烟
+        run: |
+          npm --prefix backend install --omit=dev --no-audit --no-fund
+          node tools/smoke-e2e.mjs
+
+  # ---------------------------------------------------------------------------
+  # 构建并推送镜像
+  # ---------------------------------------------------------------------------
+  image:
+    name: 构建并推送镜像
+    runs-on: ubuntu-latest
+    needs: verify
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解析版本号
+        id: version
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 登录 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 生成镜像元数据
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.value }}
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      - name: 构建并推送
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # 部署到服务器
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: 部署到服务器
+    runs-on: ubuntu-latest
+    needs: image
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 准备 SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT || 22 }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 部署
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || 22 }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/opt/psd-hub' }}
+          AUTHORS: ${{ github.actor }}
+          TOKEN: ${{ secrets.GHCR_TOKEN }}
+          VERSION: ${{ needs.image.outputs.version }}
+        run: |
+          set -euo pipefail
+          REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
+          SSH="ssh -p ${DEPLOY_PORT} -o StrictHostKeyChecking=yes"
+          SC="scp -P ${DEPLOY_PORT} -o StrictHostKeyChecking=yes"
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository }}"
+
+          echo "→ 确保部署目录存在"
+          $SSH "$REMOTE" "mkdir -p '${DEPLOY_PATH}'"
+
+          echo "→ 上传 docker-compose.yml 与 Nginx 配置"
+          $SC docker-compose.yml "$REMOTE:${DEPLOY_PATH}/docker-compose.yml"
+          $SSH "$REMOTE" "mkdir -p '${DEPLOY_PATH}/deploy/nginx' '${DEPLOY_PATH}/deploy/docker'"
+          $SC deploy/nginx/psd-hub.conf "$REMOTE:${DEPLOY_PATH}/deploy/nginx/psd-hub.conf"
+          $SC deploy/docker/Dockerfile "$REMOTE:${DEPLOY_PATH}/deploy/docker/Dockerfile"
+
+          echo "→ 远端拉取镜像并滚动重启"
+          $SSH "$REMOTE" bash -s <<EOF
+          set -euo pipefail
+          cd '${DEPLOY_PATH}'
+          if [ ! -f .env ]; then
+            echo "✗ 缺少 ${DEPLOY_PATH}/.env（含 DATA_DIR / 令牌等），请先手工创建（参考 deploy/env.example）"
+            exit 1
+          fi
+          $( [ -n "${TOKEN}" ] && echo "echo '${TOKEN}' | docker login ${IMAGE%%/*} -u '${AUTHORS}' --password-stdin" )
+
+          # 记录当前运行的镜像版本，失败时回滚用
+          PREV=\$(docker inspect --format '{{.Config.Image}}' psd-hub-app 2>/dev/null || echo '')
+          echo "上一版镜像：\${PREV:-（无）}"
+
+          PSD_HUB_IMAGE='${IMAGE}' PSD_HUB_VERSION='${VERSION}' docker compose pull psd-hub
+          PSD_HUB_IMAGE='${IMAGE}' PSD_HUB_VERSION='${VERSION}' docker compose up -d --no-build psd-hub
+
+          echo "→ 健康检查"
+          for i in \$(seq 1 20); do
+            if curl -fsS "http://127.0.0.1:\${PSD_HUB_PORT:-4000}/api/health" >/dev/null 2>&1; then
+              echo "✓ 健康检查通过"
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "✗ 健康检查失败，回滚到 \${PREV}"
+          docker logs --tail=80 psd-hub-app || true
+          if [ -n "\${PREV}" ]; then
+            docker tag "\${PREV}" '${IMAGE}:rollback' 2>/dev/null || true
+            PSD_HUB_IMAGE='${IMAGE}' PSD_HUB_VERSION='rollback' docker compose up -d --no-build psd-hub || true
+          fi
+          exit 1
+          EOF
+
+      - name: 失败时抓取远端日志
+        if: failure()
+        run: |
+          ssh -p "${{ secrets.DEPLOY_PORT || 22 }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "cd '${{ secrets.DEPLOY_PATH || '/opt/psd-hub' }}' && docker compose logs --tail=120 psd-hub" || true
+
+      - name: 部署结果通知
+        if: always()
+        run: |
+          echo "版本： ${{ needs.image.outputs.version }}"
+          echo "状态： ${{ job.status }}"

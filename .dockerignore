@@ -1,0 +1,56 @@
+# Docker 构建上下文排除清单（构建上下文 = 仓库根目录）
+
+# 依赖与缓存
+**/node_modules
+.npm-cache
+**/.npmrc
+**/.pnpm-store
+
+# 构建产物（镜像内会重新构建）
+**/dist
+**/build
+**/*.tsbuildinfo
+**/.vite
+
+# 运行时数据：PSD / PNG / 元数据库绝不进镜像
+backend/data
+data
+uploads
+backups
+**/*.psd
+**/*.psb
+**/*.png
+!frontend/public/**/*.png
+
+# 测试素材（很大，且与运行无关）
+tools/fixtures
+
+# 环境变量与机密
+.env
+.env.*
+!.env.example
+deploy/.env.deploy
+deploy/secrets
+**/*.pem
+**/*.key
+
+# 版本控制与编辑器
+.git
+.gitignore
+.github
+.vscode
+.idea
+**/.DS_Store
+Thumbs.db
+
+# 文档与工具（运行镜像不需要）
+docs
+tools
+*.md
+!README.md
+
+# 日志
+**/*.log
+logs
+coverage
+**/.nyc_output

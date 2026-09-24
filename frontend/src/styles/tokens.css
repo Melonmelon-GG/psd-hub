@@ -1,0 +1,132 @@
+/**
+ * 设计令牌（design tokens）
+ * 默认深色主题；通过 prefers-color-scheme: light 覆盖为浅色。
+ * 所有颜色均以 HSL/十六进制字面量给出，保证对比度达标（正文 ≥ 4.5:1）。
+ */
+
+:root {
+  /* ------------------------------ 颜色：深色（默认） ------------------------------ */
+  --color-bg: #0e1016;
+  --color-bg-subtle: #14171f;
+  --color-surface: #181c26;
+  --color-surface-raised: #1f2432;
+  --color-surface-hover: #242a3a;
+  --color-border: #2a3040;
+  --color-border-strong: #3a4256;
+
+  --color-text: #eef1f8;
+  --color-text-muted: #a7b0c4;
+  --color-text-subtle: #7d8698;
+
+  --color-primary: #6b93ff;
+  --color-primary-hover: #86a7ff;
+  --color-primary-active: #5a80e6;
+  --color-primary-contrast: #0b0e15;
+  --color-primary-soft: rgba(107, 147, 255, 0.14);
+
+  --color-accent: #a078ff;
+  --color-success: #4ec98b;
+  --color-warning: #f0b429;
+  --color-danger: #f87171;
+  --color-danger-hover: #ff8a8a;
+  --color-danger-soft: rgba(248, 113, 113, 0.14);
+
+  --color-focus: #8fb0ff;
+
+  /* 棋盘格（透明背景指示） */
+  --checker-a: #1b1f2b;
+  --checker-b: #232838;
+  --checker-size: 16px;
+
+  /* ------------------------------ 间距 ------------------------------ */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* ------------------------------ 圆角 ------------------------------ */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  /* ------------------------------ 阴影 ------------------------------ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 18px 46px rgba(0, 0, 0, 0.45);
+  --shadow-focus: 0 0 0 3px rgba(143, 176, 255, 0.35);
+
+  /* ------------------------------ 字体 ------------------------------ */
+  --font-sans: 'Segoe UI', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei',
+    'Hiragino Sans GB', 'Noto Sans SC', sans-serif;
+  --font-mono: 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+
+  --leading-tight: 1.3;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  /* ------------------------------ 动效 ------------------------------ */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ------------------------------ 布局 ------------------------------ */
+  --layout-max: 1280px;
+  --layout-gutter: var(--space-5);
+  --header-height: 64px;
+}
+
+/* ------------------------------ 浅色主题 ------------------------------ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #f7f8fb;
+    --color-bg-subtle: #eef0f6;
+    --color-surface: #ffffff;
+    --color-surface-raised: #ffffff;
+    --color-surface-hover: #f1f3f9;
+    --color-border: #dfe3ec;
+    --color-border-strong: #c6ccda;
+
+    --color-text: #171a22;
+    --color-text-muted: #565f73;
+    --color-text-subtle: #77808f;
+
+    --color-primary: #3355dd;
+    --color-primary-hover: #2a46bd;
+    --color-primary-active: #22399c;
+    --color-primary-contrast: #ffffff;
+    --color-primary-soft: rgba(51, 85, 221, 0.1);
+
+    --color-accent: #7a3fe0;
+    --color-success: #1c8a55;
+    --color-warning: #9a6b00;
+    --color-danger: #cc2f2f;
+    --color-danger-hover: #a82424;
+    --color-danger-soft: rgba(204, 47, 47, 0.09);
+
+    --color-focus: #3355dd;
+
+    --checker-a: #ffffff;
+    --checker-b: #e6e9f1;
+
+    --shadow-sm: 0 1px 2px rgba(20, 26, 45, 0.08);
+    --shadow-md: 0 6px 18px rgba(20, 26, 45, 0.1);
+    --shadow-lg: 0 18px 46px rgba(20, 26, 45, 0.14);
+    --shadow-focus: 0 0 0 3px rgba(51, 85, 221, 0.28);
+  }
+}

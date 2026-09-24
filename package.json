@@ -1,0 +1,31 @@
+{
+  "name": "psd-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PSD 展示台 —— 上传 / 在线预览 / 下载 Photoshop 工程（frontend/ 前端 + backend/ 后端 + deploy/ 部署代码）",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "setup": "npm --prefix tools install --no-fund --no-audit && npm --prefix backend install --no-fund --no-audit && npm --prefix frontend install --no-fund --no-audit && node tools/make-sample-psd.mjs",
+    "dev": "node tools/dev.mjs",
+    "dev:api": "npm --prefix backend run dev",
+    "dev:web": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build && npm --prefix backend run build",
+    "build:web": "npm --prefix frontend run build",
+    "build:api": "npm --prefix backend run build",
+    "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend run typecheck",
+    "test": "npm --prefix backend test && npm --prefix frontend test",
+    "test:api": "npm --prefix backend test",
+    "test:web": "npm --prefix frontend test",
+    "fixture": "node tools/make-sample-psd.mjs",
+    "verify:fixtures": "node tools/verify-fixtures.mjs",
+    "verify:structure": "node tools/verify-psd.mjs",
+    "crosscheck": "python tools/pillow-crosscheck.py",
+    "seed": "node tools/seed-demo.mjs",
+    "smoke": "node tools/smoke-e2e.mjs",
+    "start": "npm --prefix backend start",
+    "clean": "node tools/clean.mjs"
+  }
+}

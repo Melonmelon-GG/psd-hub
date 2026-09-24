@@ -1,0 +1,13 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 运行时数据（db.json、上传的 PSD/PNG、multer 临时目录）
+data/
+
+# 本地环境变量（只提交 .env.example）
+.env
+
+# 日志与其他临时文件
+*.log
+*.tsbuildinfo

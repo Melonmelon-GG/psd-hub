@@ -1,0 +1,44 @@
+# =============================================================================
+# 行尾与文本规范化
+#
+# 本项目在 Windows 上开发、部署到 Linux 服务器。若不加约束，
+# core.autocrlf 会把 deploy/scripts/*.sh、systemd unit、Dockerfile
+# 检出成 CRLF，复制到服务器后 bash 会因行尾的 \r 报
+#   "bad interpreter: /bin/bash^M" / "syntax error near unexpected token"
+# 因此这里统一规定：仓库内一律存 LF。
+# =============================================================================
+
+* text=auto eol=lf
+
+# Windows 专用脚本必须保留 CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# 明确标出 LF，避免被误判
+*.sh       text eol=lf
+*.service  text eol=lf
+*.conf     text eol=lf
+Dockerfile text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+
+# 二进制：禁止任何行尾/编码转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.bmp   binary
+*.psd   binary
+*.psb   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.pdf   binary
+*.zip   binary
+
+# 锁文件：合并时按生成规则处理，diff 中折叠
+package-lock.json  -diff linguist-generated

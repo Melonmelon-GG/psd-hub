@@ -1,0 +1,83 @@
+; =============================================================================
+; PSD 展示台 · systemd 服务单元（裸机 / VPS 部署）
+;
+; 安装步骤（完整版见 docs/DEPLOY.md 路线 B）：
+;   1) 建用户与目录
+;        sudo useradd --system --home /opt/psd-hub --shell /usr/sbin/nologin psdhub
+;        sudo mkdir -p /opt/psd-hub /var/lib/psd-hub /var/log/psd-hub /etc/psd-hub
+;        sudo chown -R psdhub:psdhub /opt/psd-hub /var/lib/psd-hub /var/log/psd-hub
+;   2) 部署代码到 /opt/psd-hub（deploy/scripts/deploy.sh 会自动做）
+;        cd /opt/psd-hub/backend && npm ci --omit=dev && npm run build   # 需要先 build
+;        注意：构建建议在本地/CI 完成，服务器只跑 dist（见 deploy.sh --mode pm2）
+;   3) 配置环境变量
+;        sudo cp deploy/systemd/psd-hub.env.example /etc/psd-hub/psd-hub.env
+;        sudo chmod 600 /etc/psd-hub/psd-hub.env
+;        sudo nano /etc/psd-hub/psd-hub.env        # 至少改 DATA_DIR / 令牌
+;   4) 启用
+;        sudo cp deploy/systemd/psd-hub.service /etc/systemd/system/
+;        sudo systemctl daemon-reload
+;        sudo systemctl enable --now psd-hub
+;        sudo systemctl status psd-hub
+;        journalctl -u psd-hub -f
+; =============================================================================
+
+[Unit]
+Description=PSD 展示台（Photoshop 工程上传 / 预览 / 下载）
+Documentation=file:///opt/psd-hub/docs/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=psdhub
+Group=psdhub
+
+WorkingDirectory=/opt/psd-hub/backend
+EnvironmentFile=/etc/psd-hub/psd-hub.env
+ExecStart=/usr/bin/node dist/index.js
+
+# 优雅重启：后端已实现 SIGTERM 处理（停止接收新连接、等待在途请求，10s 兜底）
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=20
+
+Restart=always
+RestartSec=3
+# 5 分钟内异常重启超过 5 次就放弃，避免无限重启刷日志
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+StandardOutput=append:/var/log/psd-hub/app.log
+StandardError=append:/var/log/psd-hub/app.err.log
+SyslogIdentifier=psd-hub
+
+# --------------------------- 安全加固 ---------------------------
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# ProtectSystem=strict 会把整个文件系统挂成只读，业务需要写的地方必须显式放开
+ReadWritePaths=/var/lib/psd-hub /var/log/psd-hub /opt/psd-hub/backend/data
+
+# 上传大 PSD 时的文件描述符与内存上限
+LimitNOFILE=65535
+# 处理 500MB 级 PSD 时 Node 常驻内存会上去，低于 1G 容易 OOM
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

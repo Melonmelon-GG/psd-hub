@@ -1,0 +1,56 @@
+# ---- 依赖 ----
+node_modules/
+.npm-cache/
+.npmrc
+.pnpm-store/
+
+# ---- 构建产物 ----
+dist/
+build/
+*.tsbuildinfo
+.vite/
+dist-verify/
+
+# ---- 运行时数据（PSD 工程、PNG、元数据库）----
+backend/data/
+data/
+uploads/
+*.psd
+*.psb
+
+# 测试素材由 `npm run fixture` 生成（未生成时相关测试会自动 skip）
+tools/fixtures/
+
+# ---- 备份归档 ----
+backups/
+
+# ---- 环境变量与部署机密（务必不要提交）----
+.env
+.env.local
+.env.*.local
+deploy/.env
+deploy/.env.deploy
+deploy/secrets/
+*.pem
+*.key
+!deploy/nginx/*.crt.example
+
+# ---- 日志与临时 ----
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+tmp/
+.tmp/
+
+# ---- 编辑器 / 系统 ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 测试覆盖率 ----
+coverage/
+.nyc_output/
