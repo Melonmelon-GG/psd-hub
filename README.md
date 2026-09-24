@@ -1,14 +1,18 @@
-# PSD 展示台 · psd-hub
+# 柒世纪视频组平面工程分享平台 · psd-hub
 
-一个用来**上传、在线预览、下载 Photoshop 工程**的网站。
+一个用来**分享平面工程作品**的网站：上传一张 PNG 展示图 + 一条网盘分享链接，
+访客即可浏览作品预览、读到作者写的说明，并一键前往网盘取源文件。
 
-上传 `.psd` / `.psb` 工程后，网站会保留原始文件、展示一张 PNG 预览图与作者写的说明，
-并且可以在浏览器里**直接把 PSD 解析出来做交互式预览**——切换图层显隐、缩放平移、查看图层树
-与混合模式，不需要安装 Photoshop。
+站点**不自建账号体系**，直接复用主站 [7thcv.cn](https://7thcv.cn) 的登录系统：
+**只有在册成员才能发布作品，且作者名自动取自登录用户名**；浏览、搜索与下载无需登录。
+
+> 项目最初的技术路线是「上传 PSD → 浏览器端解析 → 图层树与逐层显隐预览」，
+> **v2.0 起不再接入**，源文件改由网盘托管；相关代码按要求完整保留在仓库中，
+> 详见下方《关于「在线 PSD 预览」：v2.0 起不再接入》一节。
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  PSD 展示台                                        [上传工程]      │
+│  柒世纪视频组平面工程分享平台                        [上传作品]      │
 ├──────────────────────────────────────────────────────────────────┤
 │  ┌─────────┐ ┌─────────┐ ┌─────────┐                            │
 │  │  PNG    │ │  PNG    │ │  PNG    │   ← 卡片 = 预览图 + 标题     │
@@ -78,7 +82,7 @@ backend/src/lib/psdHeader.ts              # 文件头解析
 ```
 
 它们**仍然可编译、其测试仍然全绿，只是没有任何生产代码引用**，因此也不会被打进前端产物
-（`ag-psd` 因此从产物里消失，JS 体积从 716 KB 降到约 250 KB）。
+（`ag-psd` 因此从产物里消失，JS 体积从 716 KB 降到约 390 KB）。
 
 技术存档见 **[docs/COLOR-MODES.md](docs/COLOR-MODES.md)** —— 若将来要恢复在线预览，
 按那份文档的结论接回即可，无需重新调研。当前路线的契约见 [docs/API.md](docs/API.md)。
@@ -88,7 +92,8 @@ backend/src/lib/psdHeader.ts              # 文件头解析
 ## 技术栈
 
 **后端**：Node.js 24 · TypeScript 5.9 · Express 5 · Multer 2 · Zod 4 · 自研 JSON 元数据库（原子写 + 串行写队列）
-**前端**：Vite 7 · React 19 · React Router 7 · ag-psd 31 · 手写 CSS（无 UI 框架）
+**前端**：Vite 7 · React 19 · React Router 7 · 手写 CSS（无 UI 框架）
+（`ag-psd` 31 仍作为依赖保留给遗留预览模块，但已无生产代码引用，不会打进产物）
 **存储**：本地磁盘（默认，`FileStorage` 抽象 + S3/OSS 兼容驱动已预留）
 
 > 有意**不引入任何需要本地编译的原生依赖**（无 sharp / better-sqlite3 / node-canvas）：
@@ -110,7 +115,7 @@ psd-hub/
 │  │  ├─ lib/                PSD 文件头解析、sha256、原子写等
 │  │  ├─ sendFile.ts         Range(206/416) + ETag/304 + 中文文件名
 │  │  └─ static.ts           生产模式下托管前端产物 + SPA 回退
-│  └─ test/                  86 个测试（node:test）
+│  └─ test/                 204 个测试（node:test）
 ├─ frontend/                 前端 SPA（Vite + React）
 │  ├─ src/
 │  │  ├─ psd/                PSD 解析 / 图层树 / 混合模式映射 / 合成渲染 / 导出 PNG
@@ -118,7 +123,7 @@ psd-hub/
 │  │  ├─ components/         PsdViewer、LayerPanel、ProjectCard、上传拖拽区…
 │  │  ├─ upload/             XHR 上传（真实进度）+ 本地校验
 │  │  └─ styles/             设计令牌 + 全局样式（深色优先，适配浅色）
-│  └─ test/                  75 个测试（含 ag-psd 真实素材回归）
+│  └─ test/                 162 个测试（含 ag-psd 真实素材回归）
 ├─ deploy/                   部署与「推送服务器」相关代码
 │  ├─ docker/Dockerfile      四阶段镜像（前端产物 + 后端编译 + 精简运行层）
 │  ├─ nginx/                 反代配置 + HTTPS 模板
@@ -130,7 +135,7 @@ psd-hub/
 ├─ tools/                    本地工具（零依赖）
 │  ├─ make-sample-psd.mjs    手写字节流生成示例 PSD/PNG 测试素材
 │  ├─ verify-psd.mjs         用 ag-psd 反向校验素材结构
-│  ├─ smoke-e2e.mjs          端到端冒烟（66 项断言，也可打线上站点）
+│  ├─ smoke-e2e.mjs          端到端冒烟（145 项断言，可直连线上站点验收）
 │  ├─ dev.mjs                并行启动前后端开发服务
 │  └─ clean.mjs              清理产物与依赖
 ├─ docs/
@@ -217,21 +222,22 @@ SERVE_STATIC=true STATIC_DIR=./frontend/dist npm start
 ## 测试与验证
 
 ```bash
-npm test                 # 后端 86 个 + 前端 75 个测试
+npm test                 # 后端 204 个 + 前端 162 个测试
 npm run typecheck        # 两端类型检查
-npm run smoke            # 端到端冒烟：起真实服务 + 上传/下载/预览 66 项断言
+npm run smoke            # 端到端冒烟：起真实服务 + 上传/浏览/网盘跳转 145 项断言
 npm run verify:fixtures  # 用 ag-psd 反向校验示例 PSD 结构是否合法
 ```
 
 端到端冒烟也可以直接打线上环境做部署后验收：
 
 ```bash
-node tools/smoke-e2e.mjs --base https://psd.example.com --no-spawn
+node tools/smoke-e2e.mjs --base https://7thcv.cn/psd --no-spawn
 ```
 
-覆盖的真实链路：健康检查 → 前端静态产物 → 上传（中文标题/说明/文件名/全角逗号标签）→
-sha256 去重 409 → 列表/搜索/标签聚合 → 详情浏览计数 → PSD 下载（Range 206、附件头、
-中文文件名、下载计数）→ PNG 预览 → SPA 深链回退 → 404 错误信封 → 输入校验 400/415 → 删除。
+覆盖的真实链路：健康检查 → 前端静态产物 → 上传 PNG（中文标题/说明/文件名/全角逗号标签）→
+sha256 去重 409 → 列表/搜索/标签聚合 → 详情浏览计数 → PNG 下载（Range 206、附件头、
+中文文件名、下载计数）→ 网盘 302 跳转与下载计数 → SPA 深链回退 → 404 错误信封 →
+输入校验 400/415 → 删除。
 
 ---
 
@@ -256,7 +262,7 @@ bash deploy/scripts/deploy.sh --dry-run            # 先干跑看看
 镜像推送与数据备份：
 
 ```bash
-bash deploy/scripts/push-image.sh --registry registry.example.com/ns --tag v1.0.0
+bash deploy/scripts/push-image.sh --registry registry.example.com/ns --tag v2.1.0
 bash deploy/scripts/backup.sh --docker --keep 14 --remote backup@host:/backups
 ```
 
@@ -289,15 +295,25 @@ GET    /api/projects/:id/go                     302 跳转到网盘链接，并�
 
 这些是有意识的取舍，不是 bug：
 
-1. **裁剪图层**（clipping mask）按普通图层叠加，未实现"仅作用于下一个图层"的语义。
-2. **部分混合模式做了近似映射**：`linear burn → color-burn`、`vivid/linear/pin light → hard-light`、
-   `divide → color-dodge`、`dissolve → source-over` 等；Canvas 没有原生等价项。原生支持的
-   （multiply / screen / overlay / soft-light / hue / luminosity …）为精确等价。
-3. **PSD 解析在主线程**（`ag-psd` 是同步 API），超大文件会有短暂卡顿；已加 >150MB 二次确认与骨架屏。
-4. **元数据库是单文件 JSON**，因此**只能单实例运行**。水平扩容需要先把元数据换成
+1. **元数据库是单文件 JSON**，因此**只能单实例运行**。水平扩容需要先把元数据换成
    Postgres/SQLite，并把文件存储切到对象存储（`STORAGE_DRIVER=s3`）。PM2 配置里已明确标注。
-5. **鉴权是单令牌方案**，没有账号体系与多用户隔离。
-6. 后端不解析 PSD 图层段，`psd.layerCount` 固定为 `null`（图层信息由前端解析后实时展示）。
+2. **源文件由网盘托管，本站不留存 PSD 原件**，因此没有「站内下载源文件」这一能力；
+   网盘分享失效时只能由作者重新编辑链接。
+3. **上传严格依赖主站登录态**：主站不可达时上传会被拒绝（失败关闭），但浏览、搜索、
+   网盘跳转完全不受影响。
+4. **自动化旁路仍是单令牌方案**（`UPLOAD_TOKEN`）：它不区分调用者，仅供 CI / 部署脚本使用；
+   日常发布请一律走主站登录，清空该环境变量即可彻底关闭这条旁路。
+
+### 关于遗留的 PSD 预览模块（默认未启用）
+
+以下限制**只在将来重新接回「在线 PSD 预览」时才会生效**，当前路线不受影响：
+
+- **裁剪图层**（clipping mask）按普通图层叠加，未实现"仅作用于下一个图层"的语义。
+- **部分混合模式做了近似映射**：`linear burn → color-burn`、`vivid/linear/pin light → hard-light`、
+  `divide → color-dodge`、`dissolve → source-over` 等；Canvas 没有原生等价项。原生支持的
+  （multiply / screen / overlay / soft-light / hue / luminosity …）为精确等价。
+- **PSD 解析在主线程**（`ag-psd` 是同步 API），超大文件会有短暂卡顿；已加 >150MB 二次确认与骨架屏。
+- 后端不解析 PSD 图层段，`psd.layerCount` 固定为 `null`（图层信息由前端解析后实时展示）。
 
 ---
 

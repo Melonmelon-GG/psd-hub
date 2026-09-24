@@ -1,8 +1,8 @@
 {
   "name": "psd-hub",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "private": true,
-  "description": "PSD 展示台 —— 上传 / 在线预览 / 下载 Photoshop 工程（frontend/ 前端 + backend/ 后端 + deploy/ 部署代码）",
+  "description": "柒世纪视频组平面工程分享平台 —— 上传 PNG 展示图 + 网盘分享链接来分享平面工程作品，复用主站登录鉴权（frontend/ 前端 + backend/ 后端 + deploy/ 部署代码）",
   "license": "MIT",
   "engines": {
     "node": ">=20.19.0"
